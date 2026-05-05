@@ -78,20 +78,26 @@ Anthropic 一切照常。
 
 ## 环境要求
 
-- Node.js 18+（用内置 `fetch`，零额外依赖）
-- Claude Code CLI
-- Kimi API key（`sk-kimi-...` 开头），导出为 `ANTHROPIC_AUTH_TOKEN`
-- `ANTHROPIC_BASE_URL` 指向 Kimi（`https://api.kimi.com/coding`）
+装之前先确认你都有:
 
-拉取层**只在** `ANTHROPIC_AUTH_TOKEN` 以 `sk-kimi-` 开头时启用。其它形态
-的 token 会被静默跳过，回落到上游的 stdin / external-snapshot 路径。所以
-同一份编译产物在 Kimi 和 Anthropic 两种环境下都能正常工作。
+| | 项 | 怎么验证 |
+|---|---|---|
+| 1 | 装好了 Claude Code CLI | 终端跑 `claude --version` 出版本号 |
+| 2 | Node.js 18+ | 终端跑 `node --version` 出 `v18.x` 或更高 |
+| 3 | Kimi API key(`sk-kimi-...` 开头) | 在 [kimi.com/coding](https://www.kimi.com/coding) 拿 |
+| 4 | 已经把 Claude Code 接到 Kimi | `~/.claude/settings.json` 里有 `ANTHROPIC_BASE_URL=https://api.kimi.com/coding` 和 `ANTHROPIC_AUTH_TOKEN=sk-kimi-...` |
+
+第 4 步如果没做,本插件**不会有任何输出** —— 它故意只在 `ANTHROPIC_AUTH_TOKEN`
+以 `sk-kimi-` 开头时启用。所以同一份编译产物在 Kimi 和 Anthropic 两种环境
+下都能正常工作:换回 Anthropic 时本插件静默跳过,上游 stdin 路径接管。
 
 ---
 
 ## 安装
 
-本 fork 暂未上架 Claude Code 插件市场，手动装：
+本 fork 暂未上架 Claude Code 插件市场,手动装,**三步**:
+
+### Step 1 — 克隆 + 编译
 
 ```bash
 git clone https://github.com/caby-li/claude-kimicode-usage.git
@@ -100,21 +106,58 @@ npm install
 npm run build
 ```
 
-然后改 `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`）的
-状态栏配置：
+完事会生成 `dist/index.js`。零运行时依赖 —— 只用 Node 18+ 的内置 `fetch`。
+
+### Step 2 — 改 Claude Code 的 statusLine
+
+打开 `~/.claude/settings.json`(或 `$CLAUDE_CONFIG_DIR/settings.json`),
+加 / 改这段。如果文件或 `statusLine` 块还没有,自己建:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "bash -c 'cols=$(stty size </dev/tty 2>/dev/null | awk '\"'\"'{print $2}'\"'\"'); export COLUMNS=$(( ${cols:-120} > 4 ? ${cols:-120} - 4 : 1 )); exec \"/path/to/node\" \"/absolute/path/to/claude-kimicode-usage/dist/index.js\"'"
+    "command": "bash -c 'cols=$(stty size </dev/tty 2>/dev/null | awk '\"'\"'{print $2}'\"'\"'); export COLUMNS=$(( ${cols:-120} > 4 ? ${cols:-120} - 4 : 1 )); exec \"<NODE_PATH>\" \"<REPO_PATH>/dist/index.js\"'"
   }
 }
 ```
 
-把 `/path/to/node` 替换成 `command -v node` 的输出，
-`/absolute/path/to/claude-kimicode-usage` 替换成你 clone 到的绝对路径。然后
-**完全退出 Claude Code 再重开** —— statusLine 配置只在启动时加载一次。
+替换两个占位符,**都必须是绝对路径**:
+
+- `<NODE_PATH>` ← 终端跑 `command -v node` 输出的路径(比如
+  `/usr/local/bin/node`、`/opt/homebrew/bin/node`,或 nvm 管理的某个版本路径)
+- `<REPO_PATH>` ← 你 `git clone` 到的绝对路径(比如
+  `/Users/你的名/projects/claude-kimicode-usage`)
+
+不要用 `~`,不要用相对路径。Claude Code 在一个跟你工作目录无关的地方启动
+statusLine 命令,任何非绝对路径都会静默失败。
+
+### Step 3 — 完全退出并重启 Claude Code
+
+不是关窗口,是**完全退出**:Mac 上 `Cmd+Q`,Linux/Windows 杀掉所有
+`claude` 进程。然后再打开。`statusLine` 配置只在启动时读一次。
+
+---
+
+## 验证安装
+
+进任何一个项目,HUD 第二行应该长这样:
+
+```
+Context █░░░░░░░░░ 8% │ Usage ███░░░░░░░ 34% (resets in 3h 13m) | Weekly ░░░░░░░░░░ 0% (resets in 6d 23h)
+```
+
+`Usage` 和 `Weekly` 那两根条出来了(不再是空的)就是装成了。
+
+数值对不对的话,拿这条命令对一下:
+
+```bash
+curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
+  https://api.kimi.com/coding/v1/usages | jq '.limits[0].detail'
+```
+
+HUD 显示的 5 小时 `Usage` 百分比应该 = `used / limit * 100`,误差 ≤1%
+(因为 HUD 最长缓存 60 秒)。
 
 ---
 
@@ -129,6 +172,19 @@ Kimi 响应被缓存在 `os.tmpdir()/claude-kimicode-usage.json`：
 - **没 `sk-kimi-` token**：直接跳过
 
 加了一把 2 秒 TTL 的 lockfile，防止多 pane 同时启动时雷击刷新。
+
+---
+
+## 常见问题
+
+| 现象 | 原因 / 解法 |
+|---|---|
+| 重启后状态栏完全没东西 | `statusLine.command` 写错了。跑一遍 `node /绝对路径/dist/index.js < /dev/null` 看报错。 |
+| 有 `Context` 没 `Usage` / `Weekly` | `ANTHROPIC_AUTH_TOKEN` 不是 `sk-kimi-` 开头。本插件只在这种 token 下激活,故意的。用 `echo "$ANTHROPIC_AUTH_TOKEN" \| head -c 8` 查一下。 |
+| 数字一直不更新 | 缓存文件 `$TMPDIR/claude-kimicode-usage.json` 异常。删掉再重启 Claude Code。 |
+| `Usage` 红了 / 99 % | 真用完了,这才是这个插件存在的意义,该歇歇了。 |
+| stderr 报 `Cannot find module` | 你 `git clone` 后忘了 `npm run build`,或者 `statusLine.command` 里的 `<REPO_PATH>` 写错了。 |
+| 之前能用,Claude Code 升级后又消失了 | Claude Code 升级偶尔会重置 `~/.claude/settings.json`。重做 [安装](#安装) 第 2 步即可。 |
 
 ---
 
@@ -157,6 +213,17 @@ fork 自动继承。具体支持哪些 key 看上游文档。
   头、不存任何 PII。
 - `.gitignore` 已经把 `.env`、`.claude/settings.json`、`*.key` 等常见敏感
   路径全挡住。
+
+---
+
+## 卸载
+
+1. 打开 `~/.claude/settings.json`,把 `statusLine` 块删掉(或改回你之前的)
+2. 重启 Claude Code
+3. 想干净就 `rm -rf` 整个 clone 下来的目录
+
+本插件除了仓库目录和 `$TMPDIR`(系统重启自动清)之外不写任何地方,没有
+系统级的修改要回滚。
 
 ---
 

@@ -85,24 +85,30 @@ The render layer (`src/render/`) is untouched.
 
 ---
 
-## Requirements
+## Prerequisites
 
-- Node.js 18 or later (uses the built-in `fetch`, no extra dependencies)
-- Claude Code CLI
-- Kimi API key (`sk-kimi-...`) exported as `ANTHROPIC_AUTH_TOKEN`
-- `ANTHROPIC_BASE_URL` pointing at Kimi
-  (`https://api.kimi.com/coding`)
+Make sure you have all of the following before installing:
 
-The fetcher **only activates** when `ANTHROPIC_AUTH_TOKEN` starts with
-`sk-kimi-`. With any other token shape, it silently no-ops, and you fall
-back to the upstream stdin / external-snapshot path. So a single build
-of this plugin works correctly whether you're on Kimi or on Anthropic.
+| | What | How to verify |
+|---|---|---|
+| 1 | Claude Code CLI installed | `claude --version` shows a version |
+| 2 | Node.js 18 or later | `node --version` shows `v18.x` or higher |
+| 3 | A Kimi API key (`sk-kimi-...`) | Get one at [kimi.com/coding](https://www.kimi.com/coding) |
+| 4 | Claude Code already routed through Kimi | `~/.claude/settings.json` has `ANTHROPIC_BASE_URL=https://api.kimi.com/coding` and `ANTHROPIC_AUTH_TOKEN=sk-kimi-...` |
+
+If step 4 isn't done, this plugin produces no output — by design, it
+only activates when `ANTHROPIC_AUTH_TOKEN` starts with `sk-kimi-`. So
+the same build works correctly even if you switch back to Anthropic
+later: the fetcher silently no-ops and the upstream stdin path takes
+over.
 
 ---
 
 ## Install
 
-This fork isn't on the Claude Code plugin marketplace yet. Manual setup:
+This fork isn't on the Claude Code plugin marketplace yet. Three steps:
+
+### Step 1 — Clone and build
 
 ```bash
 git clone https://github.com/caby-li/claude-kimicode-usage.git
@@ -111,23 +117,64 @@ npm install
 npm run build
 ```
 
-Then point Claude Code's statusline at the built file. Edit
-`~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`) and
-add:
+This produces `dist/index.js`. No runtime dependencies — just the
+built-in `fetch` from Node 18+.
+
+### Step 2 — Configure Claude Code's statusLine
+
+Open `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`)
+and add a `statusLine` block. If the file or block doesn't exist yet,
+create it:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "bash -c 'cols=$(stty size </dev/tty 2>/dev/null | awk '\"'\"'{print $2}'\"'\"'); export COLUMNS=$(( ${cols:-120} > 4 ? ${cols:-120} - 4 : 1 )); exec \"/path/to/node\" \"/absolute/path/to/claude-kimicode-usage/dist/index.js\"'"
+    "command": "bash -c 'cols=$(stty size </dev/tty 2>/dev/null | awk '\"'\"'{print $2}'\"'\"'); export COLUMNS=$(( ${cols:-120} > 4 ? ${cols:-120} - 4 : 1 )); exec \"<NODE_PATH>\" \"<REPO_PATH>/dist/index.js\"'"
   }
 }
 ```
 
-Replace `/path/to/node` with the output of `command -v node`, and
-`/absolute/path/to/claude-kimicode-usage` with where you cloned this
-repo. Then **completely** quit and re-launch Claude Code; statusline
-config is loaded once at startup.
+Replace the two placeholders with **absolute paths**:
+
+- `<NODE_PATH>` — the output of `command -v node` (e.g.
+  `/usr/local/bin/node`, `/opt/homebrew/bin/node`, or your nvm-managed
+  binary path)
+- `<REPO_PATH>` — the absolute path where you cloned this repo (e.g.
+  `/Users/you/projects/claude-kimicode-usage`)
+
+Don't use `~` and don't use relative paths — Claude Code launches the
+statusLine command from an unrelated working directory, and any
+non-absolute path will fail silently.
+
+### Step 3 — Fully quit and re-launch Claude Code
+
+Closing the window isn't enough. On macOS press `Cmd+Q`. On Linux /
+Windows, kill all running `claude` processes. Then start Claude Code
+again. The statusLine config is only read at startup.
+
+---
+
+## Verifying it works
+
+Open any project. The HUD's second line should look like:
+
+```
+Context █░░░░░░░░░ 8% │ Usage ███░░░░░░░ 34% (resets in 3h 13m) | Weekly ░░░░░░░░░░ 0% (resets in 6d 23h)
+```
+
+If `Usage` and `Weekly` show numbers (instead of being missing
+entirely), the plugin is working.
+
+To cross-check the numbers against Kimi's actual quota:
+
+```bash
+curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
+  https://api.kimi.com/coding/v1/usages | jq '.limits[0].detail'
+```
+
+The HUD's 5-hour `Usage` percentage should equal `used / limit * 100`
+from this response (within ~1%, since the HUD caches for up to 60 s).
 
 ---
 
@@ -145,6 +192,19 @@ The Kimi response is cached at
 
 A 2-second-TTL lockfile prevents thundering-herd refreshes when multiple
 Claude Code panes start at once.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause / fix |
+|---|---|
+| Statusline is completely empty after restart | The `statusLine.command` itself is malformed. Run `node /absolute/path/to/dist/index.js < /dev/null` and look at the error. |
+| `Context` shows but `Usage` / `Weekly` are missing | `ANTHROPIC_AUTH_TOKEN` doesn't start with `sk-kimi-`. The fetcher only activates for Kimi tokens — that's by design. Verify with `echo "$ANTHROPIC_AUTH_TOKEN" \| head -c 8`. |
+| Numbers are stuck and never update | Delete the cache file at `$TMPDIR/claude-kimicode-usage.json` and restart Claude Code. |
+| `Usage` is red and at 99 % | You actually used up your quota. That's the bar working as intended — go take a break. |
+| `Cannot find module` error in stderr | You forgot `npm run build` after `git clone`, or the `<REPO_PATH>` in `statusLine.command` is wrong. |
+| Statusline appeared once, then disappeared after Claude Code update | Claude Code updates can occasionally reset `~/.claude/settings.json`. Re-apply Step 2 from the [Install](#install) section. |
 
 ---
 
@@ -177,6 +237,18 @@ variables — the same ones Claude Code itself uses.
   reset timestamps returned by the API — no token, no headers, no PII.
 - `.gitignore` blocks `.env`, `.claude/settings.json`, `*.key`, and
   other common secret-bearing paths.
+
+---
+
+## Uninstall
+
+1. Open `~/.claude/settings.json` and remove the `statusLine` block (or
+   restore whatever you had before)
+2. Restart Claude Code
+3. Optionally `rm -rf` the cloned repo
+
+The plugin doesn't write anywhere outside the repo and `$TMPDIR` (which
+the OS clears on reboot). No system-level changes to undo.
 
 ---
 
