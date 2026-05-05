@@ -1,0 +1,12 @@
+{
+  "name": "claude-kimicode-usage",
+  "description": "Claude Code statusline plugin that shows real Kimi /v1/usages quota (5h + weekly). Fork of jarrodwatts/claude-hud.",
+  "version": "0.1.0",
+  "author": {
+    "name": "claude-kimicode-usage contributors"
+  },
+  "homepage": "https://github.com/caby-li/claude-kimicode-usage",
+  "repository": "https://github.com/caby-li/claude-kimicode-usage",
+  "license": "MIT",
+  "keywords": ["hud", "monitoring", "statusline", "context", "kimi", "claude-code", "usage"]
+}

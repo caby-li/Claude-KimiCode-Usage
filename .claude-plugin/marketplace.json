@@ -1,0 +1,20 @@
+{
+  "name": "claude-kimicode-usage",
+  "owner": {
+    "name": "claude-kimicode-usage (fork of jarrodwatts/claude-hud)",
+    "email": ""
+  },
+  "metadata": {
+    "description": "Claude Code statusline showing real Kimi /v1/usages quota (5h + weekly)",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "claude-kimicode-usage",
+      "source": "./",
+      "description": "Statusline that displays real Kimi 5h and weekly quota by calling /v1/usages directly. Forked from claude-hud.",
+      "category": "monitoring",
+      "tags": ["hud", "statusline", "monitoring", "kimi", "context", "usage"]
+    }
+  ]
+}

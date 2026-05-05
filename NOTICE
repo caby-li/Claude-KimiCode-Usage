@@ -1,0 +1,36 @@
+claude-kimicode-usage
+=====================
+
+This project is a fork of claude-hud by Jarrod Watts:
+
+    https://github.com/jarrodwatts/claude-hud
+
+claude-hud is licensed under the MIT License (see LICENSE). The original
+copyright notice is retained in this repository.
+
+Scope of this fork
+------------------
+
+claude-hud renders the Claude Code statusline using the rate-limit fields
+that Anthropic's API returns inside Claude Code's stdin payload. Users
+routing Claude Code to Kimi (ANTHROPIC_BASE_URL=https://api.kimi.com/coding)
+do not receive those fields, so the upstream "Usage" / "Weekly" bars never
+render for them.
+
+This fork adds a new data source that calls Kimi's `/v1/usages` endpoint
+directly and feeds the same `UsageData` shape into the existing renderer,
+producing accurate 5-hour and 7-day quota bars for Kimi users.
+
+Files modified or added by this fork:
+
+  - src/kimi-api.ts           (new) — Kimi /v1/usages fetch + cache
+  - src/index.ts              (modified) — wire Kimi into the usage chain
+  - .claude-plugin/*.json     (modified) — plugin / marketplace metadata
+  - package.json              (modified) — package name + description
+  - README.md, README.zh.md   (rewritten)
+  - LICENSE                   (added fork copyright line)
+  - NOTICE                    (new)
+
+All other source files, including the entire `src/render/` tree and
+`src/types.ts`, are unchanged from upstream claude-hud and continue to
+operate under upstream's MIT terms.

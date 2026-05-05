@@ -1,0 +1,47 @@
+{
+  "name": "claude-kimicode-usage",
+  "version": "0.1.0",
+  "description": "Claude Code statusline plugin that shows real Kimi /v1/usages quota (5h + weekly). Fork of jarrodwatts/claude-hud.",
+  "type": "module",
+  "main": "dist/index.js",
+  "homepage": "https://github.com/caby-li/claude-kimicode-usage",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/caby-li/claude-kimicode-usage.git"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    ".claude-plugin/",
+    "NOTICE",
+    "LICENSE",
+    "README.md",
+    "README.zh.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "npm run build && node --test",
+    "test:coverage": "npm run build && c8 --reporter=text --reporter=lcov node --test",
+    "test:update-snapshots": "UPDATE_SNAPSHOTS=1 npm test",
+    "test:stdin": "npm run build && echo '{\"model\":{\"display_name\":\"Opus\"},\"context_window\":{\"current_usage\":{\"input_tokens\":45000},\"context_window_size\":200000},\"transcript_path\":\"/tmp/test.jsonl\"}' | node dist/index.js"
+  },
+  "keywords": [
+    "claude-code",
+    "statusline",
+    "hud",
+    "kimi",
+    "kimicode",
+    "usage"
+  ],
+  "author": "claude-kimicode-usage contributors (fork of jarrodwatts/claude-hud)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "c8": "^11.0.0",
+    "typescript": "^6.0.3"
+  }
+}
